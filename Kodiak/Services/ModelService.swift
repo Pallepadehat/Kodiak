@@ -18,6 +18,8 @@ class LMModel {
     
     var isAwaitingResponse: Bool = false
     
+    var chatManager: ChatManager?
+    
     var session = LanguageModelSession {
         """
         You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner.
@@ -25,28 +27,52 @@ class LMModel {
     }
     
     func sendMessage() {
+        guard !inputText.isEmpty, let chatManager = chatManager else { return }
+        
+        let userMessage = inputText
+        inputText = ""
         
         Task {
             do {
+                // Haptic feedback when sending message
+                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                impactFeedback.impactOccurred()
                 
-                let prompt = Prompt(inputText)
+                await MainActor.run {
+                    chatManager.addMessage(userMessage, isUser: true)
+                }
                 
-                inputText = ""
-                
+                let prompt = Prompt(userMessage)
                 let streame = session.streamResponse(to: prompt)
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.isAwaitingResponse = true
-                }
+                var hasStarted = false
+                var fullResponse = ""
                 
                 for try await promtResponse in streame {
-                    isAwaitingResponse = false
-                    print(promtResponse)
+                    if !hasStarted {
+                        await MainActor.run {
+                            self.isAwaitingResponse = true
+                        }
+                        hasStarted = true
+                    }
+                    fullResponse = promtResponse.content
                 }
                 
+                await MainActor.run {
+                    self.isAwaitingResponse = false
+                }
+                
+                await MainActor.run {
+                    chatManager.addMessage(fullResponse, isUser: false)
+                    
+                    // Haptic feedback when response is complete
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                    impactFeedback.impactOccurred()
+                }
                 
             } catch {
                 print(error.localizedDescription)
+                isAwaitingResponse = false
             }
         }
     }
