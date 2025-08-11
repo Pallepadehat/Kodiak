@@ -20,7 +20,7 @@ class LMModel {
     
     var session = LanguageModelSession {
         """
-        "You are a helpful and concise assistant. Provide clear, accurate answers in a professional.
+        You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner.
         """
     }
     

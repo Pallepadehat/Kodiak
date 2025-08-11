@@ -93,9 +93,14 @@ struct ContentView: View {
                     .textFieldStyle(.plain)
                     .disabled(model.session.isResponding)
                     .frame(height: 55)
+                    .onSubmit {
+                        if !model.inputText.isEmpty && !model.session.isResponding {
+                            model.sendMessage()
+                        }
+                    }
 
                     Button {
-
+                        model.sendMessage()
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 30, weight: .bold))

@@ -19,9 +19,16 @@ struct MessageView: View {
             ForEach(segments, id: \.id) { segment in
                 switch segment {
                 case .text(let text):
-                    Text(text.content).padding(10)
-                        .background(isUser ? Color.gray.opacity(0.2) : .clear, in:.rect(cornerRadius: 12))
-                        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+                    if isUser {
+                        Text(text.content)
+                            .padding(10)
+                            .background(Color.gray.opacity(0.2), in: .rect(cornerRadius: 12))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    } else {
+                        MarkdownTextView(text: text.content)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     
                 case .structure:
                     EmptyView()
