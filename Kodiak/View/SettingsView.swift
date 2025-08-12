@@ -18,6 +18,12 @@ struct SettingsView: View {
     @AppStorage("titleTypeSpeed") private var titleTypeSpeed: Double = 0.05
     @AppStorage("systemPrompt") private var systemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
     
+    // Tools
+    @AppStorage("toolWeatherEnabled") private var toolWeatherEnabled: Bool = true
+    @AppStorage("toolImageUploadEnabled") private var toolImageUploadEnabled: Bool = false
+    @AppStorage("toolLiveVisionEnabled") private var toolLiveVisionEnabled: Bool = false
+    @AppStorage("toolWebSearchEnabled") private var toolWebSearchEnabled: Bool = false
+    
     @State private var showDeleteCurrentConfirm = false
     @State private var showDeleteAllConfirm = false
     
@@ -73,6 +79,28 @@ struct SettingsView: View {
                             Spacer()
                         }
                     }
+                }
+                
+                Section("Tools") {
+                    Toggle(isOn: $toolWeatherEnabled) {
+                        Label("Weather", systemImage: "cloud.sun")
+                    }
+                    .onChange(of: toolWeatherEnabled) { _ in }
+                    
+                    Toggle(isOn: $toolImageUploadEnabled) {
+                        Label("Image Upload (coming soon)", systemImage: "photo")
+                    }
+                    .disabled(true)
+                    
+                    Toggle(isOn: $toolLiveVisionEnabled) {
+                        Label("Live Vision (coming soon)", systemImage: "camera.viewfinder")
+                    }
+                    .disabled(true)
+                    
+                    Toggle(isOn: $toolWebSearchEnabled) {
+                        Label("Web Search (coming soon)", systemImage: "safari")
+                    }
+                    .disabled(true)
                 }
                 
                 Section("Data") {

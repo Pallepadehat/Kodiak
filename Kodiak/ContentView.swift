@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var displayedTitle = ""
     @State private var fullGeneratedTitle = ""
     @State private var isTypingTitle = false
+    @State private var showToolsSheet = false
     
     var sidebarOverlay: some View {
         EmptyView()
@@ -98,27 +99,7 @@ struct ContentView: View {
                                 )
                                 .padding(message.isUser ? .trailing : .leading, message.isUser ? 0 : 10)
 
-                                if !message.isUser {
-                                    HStack(spacing: 10) {
-                                        let isPositive = message.sentiment == "positive"
-                                        let isNegative = message.sentiment == "negative"
-                                        Button {
-                                            chatManager.setSentiment(for: message, sentiment: isPositive ? nil : "positive")
-                                        } label: {
-                                            Image(systemName: isPositive ? "hand.thumbsup.fill" : "hand.thumbsup")
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        Button {
-                                            chatManager.setSentiment(for: message, sentiment: isNegative ? nil : "negative")
-                                        } label: {
-                                            Image(systemName: isNegative ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .foregroundStyle(.secondary)
-                                    .padding(.leading, 10)
-                                }
+                                // Sentiment UI removed per request
                             }
                         }
                     }
@@ -191,7 +172,16 @@ struct ContentView: View {
     }
     
     var inputSection: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // Tool tag pill
+            if UserDefaults.standard.bool(forKey: "toolWebSearchEnabled") {
+                Label("Search", systemImage: "globe")
+                    .font(.callout.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.1), in: Capsule())
+            }
+            
             TextField(
                 "Ask me anything...",
                 text: $model.inputText,
@@ -205,6 +195,15 @@ struct ContentView: View {
                     model.sendMessage()
                 }
             }
+
+            // Plus button to open tools sheet
+            Button {
+                showToolsSheet = true
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 28, weight: .semibold))
+            }
+            .disabled(model.session.isResponding)
 
             Button {
                 model.sendMessage()
@@ -252,23 +251,6 @@ struct ContentView: View {
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button {
-                            let _ = chatManager.createNewChat()
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                        }
-                        
-                        // Share current chat as Markdown
-                        if let currentChat = chatManager.currentChat {
-                            ShareLink(item: exportMarkdown(for: currentChat)) {
-                                Image(systemName: "square.and.arrow.up")
-                            }
-                        }
-                    }
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isShowingSettings.toggle()
                     } label: {
@@ -279,6 +261,13 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSidebar) {
             ChatHistorySheet(chatManager: $chatManager)
+        }
+        .sheet(isPresented: $showToolsSheet) {
+            ToolsSheetView(onPreferencesChanged: {
+                model.refreshSessionFromDefaults()
+            })
+            .presentationDetents([.fraction(0.5)])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView(chatManager: $chatManager)
@@ -341,18 +330,7 @@ struct ContentView: View {
         }
     }
 
-    private func exportMarkdown(for chat: Chat) -> String {
-        var lines: [String] = ["# \(chat.title)", ""]
-        let sorted = chat.messages.sorted { $0.timestamp < $1.timestamp }
-        for message in sorted {
-            if message.isUser {
-                lines.append("**You**:\n\n\(message.content)\n")
-            } else {
-                lines.append("**Assistant**:\n\n\(message.content)\n")
-            }
-        }
-        return lines.joined(separator: "\n")
-    }
+    // Export removed per request
 }
 
 #Preview {

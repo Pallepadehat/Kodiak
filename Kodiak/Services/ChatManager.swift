@@ -153,12 +153,7 @@ class ChatManager {
         saveContext()
     }
 
-    /// Sets a simple sentiment label on a message and persists it.
-    func setSentiment(for message: ChatMessage, sentiment: String?) {
-        message.sentiment = sentiment
-        message.chat?.updatedAt = Date()
-        saveContext()
-    }
+    // Sentiment management removed per request (UI no longer surfaces it)
 
     /// Triggers title generation if the current chat has at least two messages and is still untitled.
     func generateTitleIfNeeded() {

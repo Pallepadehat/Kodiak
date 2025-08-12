@@ -30,7 +30,25 @@ class LMModel {
 
     func refreshSessionFromDefaults() {
         let prompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? defaultSystemPrompt
-        session = LanguageModelSession { prompt }
+        let tools = buildEnabledTools()
+        if tools.isEmpty {
+            session = LanguageModelSession { prompt }
+        } else {
+            session = LanguageModelSession(tools: tools, instructions: prompt)
+        }
+    }
+
+    private func buildEnabledTools() -> [any Tool] {
+        var enabled: [any Tool] = []
+        if UserDefaults.standard.object(forKey: "toolWeatherEnabled") == nil {
+            // Default Weather ON on first launch
+            UserDefaults.standard.set(true, forKey: "toolWeatherEnabled")
+        }
+        if UserDefaults.standard.bool(forKey: "toolWeatherEnabled") {
+            enabled.append(WeatherTool())
+        }
+        // Future tools (disabled by default): image upload, live vision, web search
+        return enabled
     }
     
     func sendMessage() {
