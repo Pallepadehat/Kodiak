@@ -33,6 +33,8 @@ class ChatMessage {
     var isUser: Bool
     var timestamp: Date
     var chat: Chat?
+    // Stores user feedback on assistant responses: "positive", "negative", or nil
+    var sentiment: String?
     
     init(content: String, isUser: Bool, chat: Chat? = nil) {
         self.id = UUID()
@@ -40,5 +42,6 @@ class ChatMessage {
         self.isUser = isUser
         self.timestamp = Date()
         self.chat = chat
+        self.sentiment = nil
     }
 }

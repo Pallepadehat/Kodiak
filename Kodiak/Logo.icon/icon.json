@@ -1,15 +1,15 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "automatic-gradient" : "srgb:1.00000,0.63173,0.48721,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "apple.intelligence.png",
-          "name" : "apple.intelligence",
+          "image-name" : "bubble.left.and.bubble.right.fill.png",
+          "name" : "bubble.left.and.bubble.right.fill",
           "position" : {
-            "scale" : 3,
+            "scale" : 2,
             "translation-in-points" : [
               0,
               0

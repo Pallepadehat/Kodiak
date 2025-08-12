@@ -91,11 +91,35 @@ struct ContentView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let currentChat = chatManager.currentChat {
                         ForEach(currentChat.messages.sorted(by: { $0.timestamp < $1.timestamp }), id: \.id) { message in
-                            MessageView(
-                                segments: [Transcript.Segment.text(Transcript.TextSegment(content: message.content))],
-                                isUser: message.isUser
-                            )
-                            .padding(message.isUser ? .trailing : .leading, message.isUser ? 0 : 10)
+                            VStack(alignment: .leading, spacing: 6) {
+                                MessageView(
+                                    segments: [Transcript.Segment.text(Transcript.TextSegment(content: message.content))],
+                                    isUser: message.isUser
+                                )
+                                .padding(message.isUser ? .trailing : .leading, message.isUser ? 0 : 10)
+
+                                if !message.isUser {
+                                    HStack(spacing: 10) {
+                                        let isPositive = message.sentiment == "positive"
+                                        let isNegative = message.sentiment == "negative"
+                                        Button {
+                                            chatManager.setSentiment(for: message, sentiment: isPositive ? nil : "positive")
+                                        } label: {
+                                            Image(systemName: isPositive ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        Button {
+                                            chatManager.setSentiment(for: message, sentiment: isNegative ? nil : "negative")
+                                        } label: {
+                                            Image(systemName: isNegative ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 10)
+                                }
+                            }
                         }
                     }
 
@@ -131,8 +155,8 @@ struct ContentView: View {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
-                .onChange(of: model.isAwaitingResponse) { isWaiting in
-                    if isWaiting {
+                .onChange(of: model.isAwaitingResponse) { 
+                    if model.isAwaitingResponse {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             proxy.scrollTo("thinking", anchor: .bottom)
                         }

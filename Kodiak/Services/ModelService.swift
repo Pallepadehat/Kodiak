@@ -49,6 +49,7 @@ class LMModel {
                 
                 await MainActor.run {
                     chatManager.addMessage(userMessage, isUser: true)
+                    chatManager.generateTitleIfNeeded()
                 }
                 
                 // Create a placeholder assistant message for streaming

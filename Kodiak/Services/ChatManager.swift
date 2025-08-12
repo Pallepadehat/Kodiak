@@ -140,6 +140,8 @@ class ChatManager {
         let placeholder = ChatMessage(content: "", isUser: false, chat: chat)
         chat.messages.append(placeholder)
         chat.updatedAt = Date()
+        // If this is the second message in a new chat, trigger title generation
+        generateTitleIfNeeded()
         saveContext()
         return placeholder
     }
@@ -149,6 +151,27 @@ class ChatManager {
         message.content = content
         message.chat?.updatedAt = Date()
         saveContext()
+    }
+
+    /// Sets a simple sentiment label on a message and persists it.
+    func setSentiment(for message: ChatMessage, sentiment: String?) {
+        message.sentiment = sentiment
+        message.chat?.updatedAt = Date()
+        saveContext()
+    }
+
+    /// Triggers title generation if the current chat has at least two messages and is still untitled.
+    func generateTitleIfNeeded() {
+        guard let chat = currentChat else { return }
+        if chat.messages.count >= 2 && chat.title == "Untitled Chat" {
+            Task {
+                do {
+                    try await generateTitleForChat(chat)
+                } catch {
+                    print("Title generation error: \(error)")
+                }
+            }
+        }
     }
     
     private func saveContext() {
