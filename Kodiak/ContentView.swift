@@ -40,6 +40,51 @@ struct ContentView: View {
         .ignoresSafeArea()
     }
     
+    var welcomeView: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 56))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.orange, .orange.opacity(0.5))
+                Text("Welcome to Kodiak")
+                    .font(.largeTitle.bold())
+                Text("Your personal AI chat. Ask questions, learn new things, plan, write, and build.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
+            if !model.welcomeSuggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(model.welcomeSuggestions, id: \.self) { suggestion in
+                            Button {
+                                model.inputText = suggestion
+                                model.sendMessage()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles")
+                                    Text(suggestion)
+                                }
+                                .font(.callout)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(.ultraThinMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal)
+        .frame(maxHeight: .infinity, alignment: .center)
+    }
+    
     var chatScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -163,7 +208,12 @@ struct ContentView: View {
                 sidebarOverlay
                 backgroundGradient
                 
-                chatScrollView
+                if (chatManager.currentChat?.messages.isEmpty ?? true) {
+                    welcomeView
+                        .transition(.opacity)
+                } else {
+                    chatScrollView
+                }
                 inputSection
             }
             .navigationTitle(titleWithAnimation)
@@ -178,10 +228,19 @@ struct ContentView: View {
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        let _ = chatManager.createNewChat()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
+                    HStack(spacing: 14) {
+                        Button {
+                            let _ = chatManager.createNewChat()
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                        }
+                        
+                        // Share current chat as Markdown
+                        if let currentChat = chatManager.currentChat {
+                            ShareLink(item: exportMarkdown(for: currentChat)) {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                        }
                     }
                 }
                 
@@ -204,6 +263,7 @@ struct ContentView: View {
             chatManager.setModelContext(modelContext)
             model.chatManager = chatManager
             model.refreshSessionFromDefaults()
+            model.loadWelcomeSuggestionsIfNeeded()
         }
         .onChange(of: chatManager.currentChat?.title) { newTitle in
             if let title = newTitle, title != "Untitled Chat" {
@@ -255,6 +315,19 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func exportMarkdown(for chat: Chat) -> String {
+        var lines: [String] = ["# \(chat.title)", ""]
+        let sorted = chat.messages.sorted { $0.timestamp < $1.timestamp }
+        for message in sorted {
+            if message.isUser {
+                lines.append("**You**:\n\n\(message.content)\n")
+            } else {
+                lines.append("**Assistant**:\n\n\(message.content)\n")
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

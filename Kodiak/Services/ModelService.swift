@@ -18,13 +18,15 @@ class LMModel {
     
     var isAwaitingResponse: Bool = false
     
+    // Welcome suggestions for empty chat
+    var welcomeSuggestions: [String] = []
+    private let welcomeService = WelcomeSuggestionService()
+    
     var chatManager: ChatManager?
     
     private let defaultSystemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
     
-    var session = LanguageModelSession {
-        "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
-    }
+    var session = LanguageModelSession()
 
     func refreshSessionFromDefaults() {
         let prompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? defaultSystemPrompt
@@ -49,35 +51,43 @@ class LMModel {
                     chatManager.addMessage(userMessage, isUser: true)
                 }
                 
+                // Create a placeholder assistant message for streaming
+                var placeholder: ChatMessage?
+                await MainActor.run {
+                    placeholder = chatManager.createAssistantPlaceholder()
+                }
+                
                 let prompt = Prompt(userMessage)
-                let streame = session.streamResponse(to: prompt)
+                let stream = session.streamResponse(to: prompt)
                 
                 var hasStarted = false
                 var fullResponse = ""
                 
-                for try await promtResponse in streame {
+                for try await token in stream {
                     if !hasStarted {
-                        await MainActor.run {
-                            self.isAwaitingResponse = true
-                        }
+                        await MainActor.run { self.isAwaitingResponse = true }
                         hasStarted = true
                     }
-                    fullResponse = promtResponse.content
-                }
-                
-                await MainActor.run {
-                    self.isAwaitingResponse = false
-                }
-                
-                await MainActor.run {
-                    chatManager.addMessage(fullResponse, isUser: false)
-                    
-                    // Haptic feedback when response is complete
-                    if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                        impactFeedback.impactOccurred()
+                    fullResponse = token.content
+                    if let placeholder = placeholder {
+                        await MainActor.run { chatManager.updateMessage(placeholder, content: fullResponse) }
                     }
                 }
+                
+                await MainActor.run { self.isAwaitingResponse = false }
+                
+                // Finalize placeholder and trigger haptic
+                if let placeholder = placeholder {
+                    await MainActor.run {
+                        chatManager.updateMessage(placeholder, content: fullResponse)
+                        if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            impactFeedback.impactOccurred()
+                        }
+                    }
+                }
+                
+                // No follow-up suggestions; welcome suggestions shown only when chat is empty
                 
             } catch {
                 print(error.localizedDescription)
@@ -85,4 +95,17 @@ class LMModel {
             }
         }
     }
+    
+    func loadWelcomeSuggestionsIfNeeded() {
+        guard welcomeSuggestions.isEmpty else { return }
+        Task {
+            do {
+                let suggestions = try await welcomeService.generateSuggestions()
+                await MainActor.run { self.welcomeSuggestions = suggestions }
+            } catch {
+                // Ignore silently; UI will hide suggestions if empty
+            }
+        }
+    }
 }
+

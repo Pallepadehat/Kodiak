@@ -133,6 +133,24 @@ class ChatManager {
         currentChat = getOrCreateFirstChat()
     }
     
+    /// Creates an empty assistant message placeholder in the current chat for streaming updates.
+    /// - Returns: The newly created `ChatMessage` or `nil` if no current chat.
+    func createAssistantPlaceholder() -> ChatMessage? {
+        guard let chat = currentChat else { return nil }
+        let placeholder = ChatMessage(content: "", isUser: false, chat: chat)
+        chat.messages.append(placeholder)
+        chat.updatedAt = Date()
+        saveContext()
+        return placeholder
+    }
+    
+    /// Updates the content of a message and touches the parent chat's `updatedAt`.
+    func updateMessage(_ message: ChatMessage, content: String) {
+        message.content = content
+        message.chat?.updatedAt = Date()
+        saveContext()
+    }
+    
     private func saveContext() {
         guard let modelContext = modelContext else { return }
         
