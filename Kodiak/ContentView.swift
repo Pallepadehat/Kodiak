@@ -15,6 +15,10 @@ struct ContentView: View {
     @State private var showSidebar = false
     @Environment(\.modelContext) private var modelContext
     @State private var isShowingSettings = false
+    @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
+    @AppStorage("animateTitle") private var animateTitle: Bool = true
+    @AppStorage("titleTypeSpeed") private var titleTypeSpeed: Double = 0.05
+    @AppStorage("systemPrompt") private var systemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
     @State private var displayedTitle = ""
     @State private var fullGeneratedTitle = ""
     @State private var isTypingTitle = false
@@ -179,12 +183,6 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
-                    
-                    Button {
-                        let _ = chatManager.createNewChat()
-                    } label: {
-                        Image(systemName: "gear")
-                    }
                 }
                 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -200,11 +198,12 @@ struct ContentView: View {
             ChatHistorySheet(chatManager: $chatManager)
         }
         .sheet(isPresented: $isShowingSettings) {
-            // TODO: ADD sheet
+            SettingsView(chatManager: $chatManager)
         }
         .onAppear {
             chatManager.setModelContext(modelContext)
             model.chatManager = chatManager
+            model.refreshSessionFromDefaults()
         }
         .onChange(of: chatManager.currentChat?.title) { newTitle in
             if let title = newTitle, title != "Untitled Chat" {
@@ -213,25 +212,33 @@ struct ContentView: View {
                 startTypewriterAnimation()
             }
         }
+        .onChange(of: systemPrompt) { _ in
+            model.refreshSessionFromDefaults()
+        }
     }
     
     private func startTypewriterAnimation() {
+        guard animateTitle else { return }
         displayedTitle = ""
         isTypingTitle = true
         
         // Light haptic when starting to type
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
+        if hapticsEnabled {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }
         
         // Type out each character with a delay
         for (index, character) in fullGeneratedTitle.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.05) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * max(0.02, min(0.12, titleTypeSpeed))) {
                 displayedTitle += String(character)
                 
                 // Small haptic for each character (very subtle)
-                if index % 3 == 0 {  // Only every 3rd character to avoid overwhelming
-                    let subtleFeedback = UIImpactFeedbackGenerator(style: .rigid)
-                    subtleFeedback.impactOccurred(intensity: 0.3)
+                if hapticsEnabled {
+                    if index % 3 == 0 {  // Only every 3rd character to avoid overwhelming
+                        let subtleFeedback = UIImpactFeedbackGenerator(style: .rigid)
+                        subtleFeedback.impactOccurred(intensity: 0.3)
+                    }
                 }
                 
                 // When finished typing
@@ -240,8 +247,10 @@ struct ContentView: View {
                         isTypingTitle = false
                         
                         // Final haptic when complete
-                        let completeFeedback = UIImpactFeedbackGenerator(style: .medium)
-                        completeFeedback.impactOccurred()
+                        if hapticsEnabled {
+                            let completeFeedback = UIImpactFeedbackGenerator(style: .medium)
+                            completeFeedback.impactOccurred()
+                        }
                     }
                 }
             }

@@ -20,10 +20,15 @@ class LMModel {
     
     var chatManager: ChatManager?
     
+    private let defaultSystemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
+    
     var session = LanguageModelSession {
-        """
-        You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner.
-        """
+        "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
+    }
+
+    func refreshSessionFromDefaults() {
+        let prompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? defaultSystemPrompt
+        session = LanguageModelSession { prompt }
     }
     
     func sendMessage() {
@@ -35,8 +40,10 @@ class LMModel {
         Task {
             do {
                 // Haptic feedback when sending message
-                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                impactFeedback.impactOccurred()
+                if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                }
                 
                 await MainActor.run {
                     chatManager.addMessage(userMessage, isUser: true)
@@ -66,8 +73,10 @@ class LMModel {
                     chatManager.addMessage(fullResponse, isUser: false)
                     
                     // Haptic feedback when response is complete
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                    impactFeedback.impactOccurred()
+                    if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
+                    }
                 }
                 
             } catch {

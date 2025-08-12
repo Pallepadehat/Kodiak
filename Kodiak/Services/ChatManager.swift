@@ -110,6 +110,29 @@ class ChatManager {
         saveContext()
     }
     
+    /// Deletes the currently selected chat, if any, and updates `currentChat` accordingly.
+    func deleteCurrentChat() {
+        guard let chat = currentChat else { return }
+        deleteChat(chat)
+    }
+    
+    /// Deletes all chats from the persistent store and creates a fresh empty chat.
+    func deleteAllChats() {
+        guard let modelContext = modelContext else { return }
+        let fetchDescriptor = FetchDescriptor<Chat>()
+        do {
+            let allChats = try modelContext.fetch(fetchDescriptor)
+            for chat in allChats {
+                modelContext.delete(chat)
+            }
+            try modelContext.save()
+        } catch {
+            print("Failed to delete all chats: \(error)")
+        }
+        // Ensure the app has a chat to show
+        currentChat = getOrCreateFirstChat()
+    }
+    
     private func saveContext() {
         guard let modelContext = modelContext else { return }
         
