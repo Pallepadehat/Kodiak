@@ -47,7 +47,13 @@ class LMModel {
         if UserDefaults.standard.bool(forKey: "toolWeatherEnabled") {
             enabled.append(WeatherTool())
         }
-        // Future tools (disabled by default): image upload, live vision, web search
+        // Future tools (disabled by default)
+        if UserDefaults.standard.bool(forKey: "toolWebSearchEnabled") {
+            enabled.append(WebSearchTool())
+        }
+        if UserDefaults.standard.bool(forKey: "toolWikipediaEnabled") {
+            enabled.append(WikipediaTool())
+        }
         return enabled
     }
     

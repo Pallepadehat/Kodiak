@@ -11,19 +11,54 @@ struct ToolsSheetView: View {
     var onPreferencesChanged: () -> Void
     
     @AppStorage("toolWeatherEnabled") private var toolWeatherEnabled: Bool = true
+    @AppStorage("toolWebSearchEnabled") private var toolWebSearchEnabled: Bool = false
+    @AppStorage("toolWikipediaEnabled") private var toolWikipediaEnabled: Bool = false
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                header
-                weatherRow
-                suggestions
-                footer
+        List {
+            Section(header: header) {
+                Toggle(isOn: $toolWeatherEnabled) {
+                    ToolRow(
+                        icon: "cloud.sun.fill",
+                        iconColors: [.orange, .yellow],
+                        title: "Weather",
+                        subtitle: "Answer weather questions using Apple WeatherKit",
+                        status: toolWeatherEnabled ? .enabled : .disabled
+                    )
+                }
+                .tint(.orange)
+                .onChange(of: toolWeatherEnabled) { _ in onPreferencesChanged() }
+
+                Toggle(isOn: $toolWebSearchEnabled) {
+                    ToolRow(
+                        icon: "magnifyingglass.circle.fill",
+                        iconColors: [.blue, .teal],
+                        title: "Web Search",
+                        subtitle: "Search the web for up-to-date answers",
+                        status: .comingSoon
+                    )
+                }
+                .tint(.blue)
+                .disabled(true)
+
+                Toggle(isOn: $toolWikipediaEnabled) {
+                    ToolRow(
+                        icon: "book.pages.fill",
+                        iconColors: [.purple, .indigo],
+                        title: "Wikipedia",
+                        subtitle: "Summarize topics from Wikipedia",
+                        status: .comingSoon
+                    )
+                }
+                .tint(.purple)
+                .disabled(true)
             }
-            .padding(20)
+
+            Section(footer: Text("Tools run on demand when the model decides they help answer your question. Weather uses Apple WeatherKit.").foregroundStyle(.secondary)) { EmptyView() }
         }
-        .scrollIndicators(.never)
-        .background(.clear)
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #endif
     }
     
     // MARK: - Sections
@@ -50,84 +85,69 @@ struct ToolsSheetView: View {
         }
     }
     
-    private var weatherRow: some View {
-        Toggle(isOn: $toolWeatherEnabled) {
-            HStack(alignment: .center, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.orange.opacity(0.15))
-                        )
-                    Image(systemName: "cloud.sun.fill")
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.orange, .yellow)
-                        .font(.system(size: 20, weight: .semibold))
-                }
-                .frame(width: 44, height: 44)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Weather")
-                        .font(.headline)
-                    Text("Answer weather questions via WeatherKit from Apple")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.orange.opacity(0.12))
-            )
-        }
-        .tint(.orange)
-        .onChange(of: toolWeatherEnabled) { _ in onPreferencesChanged() }
-    }
-    
-    private var suggestions: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Try prompts")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(examplePrompts, id: \.self) { prompt in
-                        Text(prompt)
-                            .font(.callout)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: Capsule())
-                    }
-                }
-            }
-        }
-    }
-    
-    private var footer: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "info.circle")
-                .foregroundStyle(.secondary)
-            Text("Tools run on demand when the model decides they help answer your question. Weather uses the Open‑Meteo API.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.top, 4)
-    }
-    
-    private var examplePrompts: [String] {
-        [
-            "Weather in Copenhagen",
-            "Is it raining in Odense?",
-            "Wind speed in Aarhus",
-            "Humidity in Aalborg"
-        ]
-    }
 }
 
+// MARK: - ToolRow
+private struct ToolRow: View {
+    enum Status { case enabled, disabled, comingSoon }
 
+    let icon: String
+    let iconColors: [Color]
+    let title: String
+    let subtitle: String
+    let status: Status
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                Image(systemName: icon)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(iconColors.first ?? .primary, (iconColors.dropFirst().first ?? (iconColors.first ?? .primary)).opacity(0.8))
+                    .font(.system(size: 20, weight: .semibold))
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                    statusBadge
+                }
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        switch status {
+        case .enabled:
+            Text("Enabled")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.green.opacity(0.15), in: Capsule())
+                .foregroundStyle(.green)
+        case .disabled:
+            Text("Disabled")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.gray.opacity(0.15), in: Capsule())
+                .foregroundStyle(.secondary)
+        case .comingSoon:
+            Text("Coming soon")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.15), in: Capsule())
+                .foregroundStyle(.orange)
+        }
+    }
+}
