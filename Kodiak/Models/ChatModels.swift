@@ -15,6 +15,7 @@ class Chat {
     var title: String
     var createdAt: Date
     var updatedAt: Date
+    var isPinned: Bool
     @Relationship(deleteRule: .cascade) var messages: [ChatMessage]
     
     init(title: String = "Untitled Chat") {
@@ -22,6 +23,7 @@ class Chat {
         self.title = title
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.isPinned = false
         self.messages = []
     }
 }

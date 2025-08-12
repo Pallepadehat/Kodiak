@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage("animateTitle") private var animateTitle: Bool = true
     @AppStorage("titleTypeSpeed") private var titleTypeSpeed: Double = 0.05
     @AppStorage("systemPrompt") private var systemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
+    @AppStorage("showTimestamps") private var showTimestamps: Bool = true
     
     // Tools controls removed; managed in Tools sheet
     
@@ -33,6 +34,9 @@ struct SettingsView: View {
                 Section("General") {
                     Toggle(isOn: $hapticsEnabled) {
                         Label("Haptics", systemImage: "iphone.radiowaves.left.and.right")
+                    }
+                    Toggle(isOn: $showTimestamps) {
+                        Label("Show Timestamps", systemImage: "clock")
                     }
                 }
                 

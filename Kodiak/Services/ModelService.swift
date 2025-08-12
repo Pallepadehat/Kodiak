@@ -8,6 +8,7 @@
 import Foundation
 import FoundationModels
 import SwiftUI
+import CoreHaptics
 
 @Observable
 class LMModel {
@@ -24,7 +25,7 @@ class LMModel {
     
     var chatManager: ChatManager?
     
-    private let defaultSystemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
+    private let defaultSystemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner. You will provide good and detailed answers if the users ask for knowglage. Always respond in markdown format. ONLY USE TOOLS IF NEEDED!"
     
     var session = LanguageModelSession()
 
@@ -66,7 +67,7 @@ class LMModel {
         Task {
             do {
                 // Haptic feedback when sending message
-                if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
+                if UserDefaults.standard.bool(forKey: "hapticsEnabled") && CHHapticEngine.capabilitiesForHardware().supportsHaptics {
                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                     impactFeedback.impactOccurred()
                 }
@@ -105,7 +106,7 @@ class LMModel {
                 if let placeholder = placeholder {
                     await MainActor.run {
                         chatManager.updateMessage(placeholder, content: fullResponse)
-                        if UserDefaults.standard.bool(forKey: "hapticsEnabled") {
+                        if UserDefaults.standard.bool(forKey: "hapticsEnabled") && CHHapticEngine.capabilitiesForHardware().supportsHaptics {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
                             impactFeedback.impactOccurred()
                         }
@@ -129,6 +130,43 @@ class LMModel {
                 await MainActor.run { self.welcomeSuggestions = suggestions }
             } catch {
                 // Ignore silently; UI will hide suggestions if empty
+            }
+        }
+    }
+
+    /// Regenerate an assistant response for a given message context.
+    /// - Parameters:
+    ///   - targetAssistant: If provided, we will regenerate this assistant message using the nearest preceding user message.
+    ///   - targetUser: If provided, we will regenerate a response to this user message.
+    func regenerateResponse(targetAssistant: ChatMessage? = nil, targetUser: ChatMessage? = nil) {
+        guard let chatManager = chatManager else { return }
+        Task {
+            var userSource: ChatMessage?
+            var assistantTarget: ChatMessage?
+            if let targetUser = targetUser {
+                userSource = targetUser
+                assistantTarget = await MainActor.run { chatManager.firstAssistantAfter(userMessage: targetUser) }
+            } else if let targetAssistant = targetAssistant {
+                assistantTarget = targetAssistant
+                userSource = await MainActor.run { chatManager.previousUserMessage(before: targetAssistant) }
+            }
+            guard let userMessage = userSource else { return }
+            let prompt = Prompt(userMessage.content)
+            let stream = session.streamResponse(to: prompt)
+            var fullResponse = ""
+            for try await token in stream {
+                fullResponse = token.content
+                if let assistantTarget = assistantTarget {
+                    await MainActor.run { chatManager.updateMessage(assistantTarget, content: fullResponse) }
+                } else {
+                    // If there was no assistant target, create/stream into a new one
+                    var placeholder: ChatMessage?
+                    await MainActor.run { placeholder = chatManager.createAssistantPlaceholder() }
+                    if let placeholder = placeholder {
+                        await MainActor.run { chatManager.updateMessage(placeholder, content: fullResponse) }
+                        assistantTarget = placeholder
+                    }
+                }
             }
         }
     }

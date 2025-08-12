@@ -8,6 +8,8 @@
 import FoundationModels
 import SwiftData
 import SwiftUI
+import CoreHaptics
+import UIKit
 
 struct ContentView: View {
     @State var model = LMModel()
@@ -103,15 +105,18 @@ struct ContentView: View {
                         ) { message in
                             VStack(alignment: .leading, spacing: 6) {
                                 MessageView(
-                                    segments: [
-                                        Transcript.Segment.text(
-                                            Transcript.TextSegment(
-                                                content: message.content
-                                            )
-                                        )
-                                    ],
-                                    isUser: message.isUser
-                                )
+                                     segments: [
+                                         Transcript.Segment.text(
+                                             Transcript.TextSegment(
+                                                 content: message.content
+                                             )
+                                         )
+                                     ],
+                                     isUser: message.isUser,
+                                     message: message,
+                                     chatManager: chatManager,
+                                     model: model
+                                 )
                                 .padding(
                                     message.isUser ? .trailing : .leading,
                                     message.isUser ? 0 : 10
@@ -268,10 +273,24 @@ struct ContentView: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingSettings.toggle()
+                    Menu {
+                        Button {
+                            promptRenameTitle()
+                        } label: { Label("Rename Chat", systemImage: "pencil") }
+                        Button(role: .destructive) {
+                            if let current = chatManager.currentChat {
+                                chatManager.deleteChat(current)
+                            }
+                        } label: { Label("Delete Chat", systemImage: "trash") }
+                        Button {
+                            shareCurrentChat()
+                        } label: { Label("Share Chat", systemImage: "square.and.arrow.up") }
+                        Divider()
+                        Button {
+                            isShowingSettings.toggle()
+                        } label: { Label("Settings", systemImage: "gear") }
                     } label: {
-                        Image(systemName: "gear")
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -312,11 +331,13 @@ struct ContentView: View {
         displayedTitle = ""
         isTypingTitle = true
 
-        // Light haptic when starting to type
-        if hapticsEnabled {
+        // Light haptic when starting to type (only on iOS devices with haptics)
+        #if os(iOS)
+        if hapticsEnabled && deviceSupportsHaptics {
             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
             impactFeedback.impactOccurred()
         }
+        #endif
 
         // Type out each character with a delay
         for (index, character) in fullGeneratedTitle.enumerated() {
@@ -327,14 +348,14 @@ struct ContentView: View {
                 displayedTitle += String(character)
 
                 // Small haptic for each character (very subtle)
-                if hapticsEnabled {
+                #if os(iOS)
+                if hapticsEnabled && deviceSupportsHaptics {
                     if index % 3 == 0 {  // Only every 3rd character to avoid overwhelming
-                        let subtleFeedback = UIImpactFeedbackGenerator(
-                            style: .rigid
-                        )
+                        let subtleFeedback = UIImpactFeedbackGenerator(style: .rigid)
                         subtleFeedback.impactOccurred(intensity: 0.3)
                     }
                 }
+                #endif
 
                 // When finished typing
                 if index == fullGeneratedTitle.count - 1 {
@@ -342,12 +363,12 @@ struct ContentView: View {
                         isTypingTitle = false
 
                         // Final haptic when complete
-                        if hapticsEnabled {
-                            let completeFeedback = UIImpactFeedbackGenerator(
-                                style: .medium
-                            )
+                        #if os(iOS)
+                        if hapticsEnabled && deviceSupportsHaptics {
+                            let completeFeedback = UIImpactFeedbackGenerator(style: .medium)
                             completeFeedback.impactOccurred()
                         }
+                        #endif
                     }
                 }
             }
@@ -355,6 +376,48 @@ struct ContentView: View {
     }
 
     // Export removed per request
+    
+    #if os(iOS)
+    private var deviceSupportsHaptics: Bool {
+        CHHapticEngine.capabilitiesForHardware().supportsHaptics
+    }
+    #endif
+    private func promptRenameTitle() {
+        guard let current = chatManager.currentChat else { return }
+        let alert = UIAlertController(title: "Rename Chat", message: nil, preferredStyle: .alert)
+        alert.addTextField { tf in tf.text = current.title }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
+            if let text = alert.textFields?.first?.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                current.title = String(text.prefix(50))
+                chatManager.generateTitleIfNeeded()
+            }
+        }))
+        presentAlert(alert)
+    }
+    
+    private func presentAlert(_ alert: UIAlertController) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.keyWindow?.rootViewController else { return }
+        root.present(alert, animated: true)
+    }
+    
+    private func shareCurrentChat() {
+        guard let chat = chatManager.currentChat, !chat.messages.isEmpty else { return }
+        let text = buildMarkdown(for: chat)
+        let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.keyWindow?.rootViewController else { return }
+        root.present(av, animated: true)
+    }
+    
+    private func buildMarkdown(for chat: Chat) -> String {
+        var lines: [String] = ["# \(chat.title)"]
+        for m in chat.messages.sorted(by: { $0.timestamp < $1.timestamp }) {
+            lines.append("\(m.isUser ? "**You**" : "**Kodiak**"): \n\(m.content)\n")
+        }
+        return lines.joined(separator: "\n\n")
+    }
 }
 
 #Preview {

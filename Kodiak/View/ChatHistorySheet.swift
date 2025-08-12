@@ -14,8 +14,10 @@ struct ChatHistorySheet: View {
     @Environment(\.modelContext) private var modelContext
     
     // Use @Query for automatic updates and proper sorting
-    @Query(sort: [SortDescriptor(\Chat.updatedAt, order: .reverse)]) 
+    @Query(sort: [SortDescriptor(\Chat.updatedAt, order: .reverse)])
     var chats: [Chat]
+    
+    @State private var searchText: String = ""
     
     init(chatManager: Binding<ChatManager>) {
         self._chatManager = chatManager
@@ -24,7 +26,7 @@ struct ChatHistorySheet: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(chats, id: \.id) { chat in
+                ForEach(displayedChats, id: \.id) { chat in
                     Button {
                         chatManager.selectChat(chat)
                         dismiss()
@@ -43,6 +45,11 @@ struct ChatHistorySheet: View {
                             
                             Spacer()
                             
+                            if chat.isPinned {
+                                Image(systemName: "pin.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            
                             if chatManager.currentChat?.id == chat.id {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(.orange)
@@ -52,6 +59,20 @@ struct ChatHistorySheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button {
+                            chatManager.togglePin(chat)
+                        } label: {
+                            Label(chat.isPinned ? "Unpin" : "Pin", systemImage: chat.isPinned ? "pin.slash" : "pin")
+                        }
+                        .tint(.orange)
+                        
+                        Button(role: .destructive) {
+                            deleteChat(chat)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
                 .onDelete(perform: deleteChats)
             }
@@ -73,6 +94,37 @@ struct ChatHistorySheet: View {
                     }
                 }
             }
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
+        }
+    }
+    
+    private func deleteChat(_ chat: Chat) {
+        // Update current chat if we're deleting it
+        if chatManager.currentChat?.id == chat.id {
+            chatManager.currentChat = chats.first { $0.id != chat.id }
+        }
+        modelContext.delete(chat)
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to delete chat: \(error)")
+        }
+    }
+    
+    private var displayedChats: [Chat] {
+        let filtered: [Chat]
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            filtered = chats
+        } else {
+            let q = searchText.lowercased()
+            filtered = chats.filter { chat in
+                if chat.title.lowercased().contains(q) { return true }
+                return chat.messages.contains { $0.content.lowercased().contains(q) }
+            }
+        }
+        return filtered.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned && !rhs.isPinned }
+            return lhs.updatedAt > rhs.updatedAt
         }
     }
     

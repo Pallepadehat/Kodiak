@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		16D799DB2E4BE9CC008A2ACE /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 16D799DA2E4BE9CC008A2ACE /* MarkdownUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		167EB01C2E4A80BF002D407B /* Kodiak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kodiak.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				16D799DB2E4BE9CC008A2ACE /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = Kodiak;
 			packageProductDependencies = (
+				16D799DA2E4BE9CC008A2ACE /* MarkdownUI */,
 			);
 			productName = Kodiak;
 			productReference = 167EB01C2E4A80BF002D407B /* Kodiak.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 167EB0132E4A80BF002D407B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				16D799D92E4BE9CC008A2ACE /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 167EB01D2E4A80BF002D407B /* Products */;
 			projectDirPath = "";
@@ -346,6 +355,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		16D799D92E4BE9CC008A2ACE /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		16D799DA2E4BE9CC008A2ACE /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 16D799D92E4BE9CC008A2ACE /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 167EB0142E4A80BF002D407B /* Project object */;
 }

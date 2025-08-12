@@ -77,6 +77,47 @@ class ChatManager {
         
         saveContext()
     }
+
+    /// Deletes a specific message from the current chat.
+    func deleteMessage(_ message: ChatMessage) {
+        guard let chat = currentChat else { return }
+        chat.messages.removeAll { $0.id == message.id }
+        chat.updatedAt = Date()
+        saveContext()
+    }
+
+    /// Replaces the content of an existing assistant message with a regenerated response.
+    func replaceAssistantMessage(_ message: ChatMessage, with content: String) {
+        guard !message.isUser else { return }
+        updateMessage(message, content: content)
+    }
+
+    /// Finds the most recent user message before a given index in the current chat.
+    func previousUserMessage(before message: ChatMessage) -> ChatMessage? {
+        guard let chat = currentChat else { return nil }
+        guard let idx = chat.messages.firstIndex(where: { $0.id == message.id }) else { return nil }
+        for i in stride(from: idx - 1, through: 0, by: -1) {
+            let m = chat.messages[i]
+            if m.isUser { return m }
+        }
+        return nil
+    }
+
+    /// Finds the assistant message immediately after a given user message, if any.
+    func firstAssistantAfter(userMessage: ChatMessage) -> ChatMessage? {
+        guard let chat = currentChat else { return nil }
+        guard let idx = chat.messages.firstIndex(where: { $0.id == userMessage.id }) else { return nil }
+        guard idx + 1 < chat.messages.count else { return nil }
+        let next = chat.messages[idx + 1]
+        return next.isUser ? nil : next
+    }
+
+    /// Toggle pin state for a chat
+    func togglePin(_ chat: Chat) {
+        chat.isPinned.toggle()
+        chat.updatedAt = Date()
+        saveContext()
+    }
     
     @MainActor
     private func generateTitleForChat(_ chat: Chat) async throws {
