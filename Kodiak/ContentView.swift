@@ -193,63 +193,51 @@ struct ContentView: View {
     }
 
     var inputSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            
-            ScrollView(.horizontal) {
-                Label("Search", systemImage: "globe")
-                    .font(.callout.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.1), in: Capsule())
-            }
+        HStack(spacing: 8) {
 
-            HStack(spacing: 8) {
-
-                TextField(
-                    "Ask me anything...",
-                    text: $model.inputText,
-                    axis: .vertical
-                )
-                .textFieldStyle(.plain)
-                .disabled(model.session.isResponding)
-                .frame(height: 55)
-                .onSubmit {
-                    if !model.inputText.isEmpty && !model.session.isResponding {
-                        model.sendMessage()
-                    }
-                }
-
-                // Plus button to open tools sheet
-                Button {
-                    showToolsSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(
-                            model.session.isResponding
-                                ? Color.gray.opacity(0.6) : .primary
-                        )
-                }
-                .disabled(model.session.isResponding)
-
-                Button {
+            TextField(
+                "Ask me anything...",
+                text: $model.inputText,
+                axis: .vertical
+            )
+            .textFieldStyle(.plain)
+            .disabled(model.session.isResponding)
+            .frame(height: 55)
+            .onSubmit {
+                if !model.inputText.isEmpty && !model.session.isResponding {
                     model.sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(
-                            model.session.isResponding
-                                ? Color.gray.opacity(0.6) : .primary
-                        )
                 }
-                .disabled(
-                    model.inputText.isEmpty || model.session.isResponding
-                )
             }
-            .padding(.horizontal)
-            .glassEffect(.regular.interactive())
 
+            // Plus button to open tools sheet
+            Button {
+                showToolsSheet = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(
+                        model.session.isResponding
+                            ? Color.gray.opacity(0.6) : .primary
+                    )
+            }
+            .disabled(model.session.isResponding)
+
+            Button {
+                model.sendMessage()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(
+                        model.session.isResponding
+                            ? Color.gray.opacity(0.6) : .primary
+                    )
+            }
+            .disabled(
+                model.inputText.isEmpty || model.session.isResponding
+            )
         }
+        .padding(.horizontal)
+        .glassEffect(.regular.interactive())
         .frame(maxHeight: .infinity, alignment: .bottom)
         .padding()
     }
