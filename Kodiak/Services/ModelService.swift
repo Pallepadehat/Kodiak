@@ -35,6 +35,7 @@ class LMModel {
     #endif
 
     var liveTranscript: String = ""
+    private var partialAutoSendWorkItem: DispatchWorkItem?
 
     // Composer attachments staged before sending
     struct ComposerAttachment: Identifiable, Equatable {
@@ -222,8 +223,26 @@ class LMModel {
     func startVoiceCapture(autoSend: Bool = false) {
         #if os(iOS)
         liveTranscript = ""
+        // If user begins speaking, stop any ongoing TTS for barge-in
+        voice.stopSpeaking()
         voice.startListening(onPartial: { [weak self] partial in
             self?.liveTranscript = partial
+            // Show live text while speaking
+            self?.inputText = partial
+            // Debounce auto-send on pause for real-time feel
+            guard autoSend else { return }
+            self?.partialAutoSendWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                if !self.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   !self.session.isResponding {
+                    // Finalize current utterance on pause
+                    self.voice.stopListening()
+                    self.sendMessage()
+                }
+            }
+            self?.partialAutoSendWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
         }, onFinal: { [weak self] finalText in
             guard let self = self else { return }
             self.inputText = finalText

@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var isRecording = false
     @AppStorage("voiceInputEnabled") private var voiceInputEnabled: Bool = false
     @AppStorage("handsFreeEnabled") private var handsFreeEnabled: Bool = false
+    @State private var showVoiceSheet = false
 
     var sidebarOverlay: some View {
         EmptyView()
@@ -285,13 +286,7 @@ struct ContentView: View {
 
                 // Mic
                 Button {
-                    if isRecording {
-                        model.stopVoiceCapture()
-                        isRecording = false
-                    } else {
-                        model.startVoiceCapture(autoSend: handsFreeEnabled)
-                        isRecording = true
-                    }
+                    showVoiceSheet = true
                 } label: {
                     Image(systemName: isRecording ? "mic.fill" : "mic")
                         .font(.system(size: 20, weight: .semibold))
@@ -338,6 +333,9 @@ struct ContentView: View {
             }
         }
         // PDF picker removed
+        .sheet(isPresented: $showVoiceSheet) {
+            VoiceChatSheet(model: model, chatManager: chatManager)
+        }
     }
 
     var body: some View {
