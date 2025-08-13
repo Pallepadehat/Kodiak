@@ -35,55 +35,95 @@ final class VoiceService: NSObject {
 		speechSynthesizer.delegate = self
 	}
 
-	func startListening(
-		onPartial: @escaping (String) -> Void,
-		onFinal: @escaping (String) -> Void,
-		onError: @escaping (Error) -> Void
-	) {
-		// Stop any ongoing recognition
-		stopListening()
+    func startListening(
+        onPartial: @escaping (String) -> Void,
+        onFinal: @escaping (String) -> Void,
+        onError: @escaping (Error) -> Void
+    ) {
+        // Stop any ongoing recognition
+        stopListening()
 
-		let request = SFSpeechAudioBufferRecognitionRequest()
-		request.shouldReportPartialResults = true
-		if #available(iOS 16.0, *) {
-			request.addsPunctuation = true
-		}
-		self.recognitionRequest = request
+        Task { @MainActor in
+            // Request permissions & configure audio session first
+            let speechAuth = await requestSpeechAuthorization()
+            guard speechAuth else {
+                onError(NSError(domain: "VoiceService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognition not authorized"]))
+                return
+            }
+            guard await requestMicPermission() else {
+                onError(NSError(domain: "VoiceService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Microphone access not granted"]))
+                return
+            }
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            } catch {
+                onError(error)
+                return
+            }
 
-		let inputNode = audioEngine.inputNode
-		let recordingFormat = inputNode.outputFormat(forBus: 0)
-		inputNode.removeTap(onBus: 0)
-		inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-			self?.recognitionRequest?.append(buffer)
-		}
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            if #available(iOS 16.0, *) {
+                request.addsPunctuation = true
+            }
+            self.recognitionRequest = request
 
-		audioEngine.prepare()
-		do {
-			try audioEngine.start()
-			isListening = true
-		} catch {
-			onError(error)
-			return
-		}
+            let inputNode = self.audioEngine.inputNode
+            let recordingFormat = inputNode.outputFormat(forBus: 0)
+            inputNode.removeTap(onBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+            }
 
-		guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
-			onError(NSError(domain: "VoiceService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer unavailable"]))
-			return
-		}
+            self.audioEngine.prepare()
+            do {
+                try self.audioEngine.start()
+                self.isListening = true
+            } catch {
+                onError(error)
+                return
+            }
 
-		recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
-			if let error = error {
-				onError(error)
-				self?.stopListening()
-				return
+            guard let speechRecognizer = self.speechRecognizer, speechRecognizer.isAvailable else {
+                onError(NSError(domain: "VoiceService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer unavailable"]))
+                return
+            }
+
+            self.recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
+                if let error = error {
+                    onError(error)
+                    self?.stopListening()
+                    return
+                }
+                guard let result = result else { return }
+                let transcript = result.bestTranscription.formattedString
+                if result.isFinal {
+                    onFinal(transcript)
+                    self?.stopListening()
+                } else {
+                    onPartial(transcript)
+                }
+            }
+        }
+    }
+
+	private func requestSpeechAuthorization() async -> Bool {
+		await withCheckedContinuation { continuation in
+			SFSpeechRecognizer.requestAuthorization { status in
+				switch status {
+				case .authorized: continuation.resume(returning: true)
+				default: continuation.resume(returning: false)
+				}
 			}
-			guard let result = result else { return }
-			let transcript = result.bestTranscription.formattedString
-			if result.isFinal {
-				onFinal(transcript)
-				self?.stopListening()
-			} else {
-				onPartial(transcript)
+		}
+	}
+
+	private func requestMicPermission() async -> Bool {
+		await withCheckedContinuation { continuation in
+			AVAudioApplication.requestRecordPermission { granted in
+				continuation.resume(returning: granted)
 			}
 		}
 	}

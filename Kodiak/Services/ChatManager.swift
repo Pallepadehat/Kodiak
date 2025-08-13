@@ -152,6 +152,8 @@ class ChatManager {
         
         modelContext?.delete(chat)
         saveContext()
+        // Clear attachment runtime cache when deleting a chat that may own recent images
+        AttachmentRegistry.shared.clearImages()
     }
     
     /// Deletes the currently selected chat, if any, and updates `currentChat` accordingly.
@@ -175,6 +177,8 @@ class ChatManager {
         }
         // Ensure the app has a chat to show
         currentChat = getOrCreateFirstChat()
+        // Clear all attachment runtime cache
+        AttachmentRegistry.shared.clearAll()
     }
     
     /// Creates an empty assistant message placeholder in the current chat for streaming updates.

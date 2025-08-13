@@ -116,8 +116,10 @@ class LMModel {
                 
                 // Inject contextual tool hint for latest attachments so the model knows to use tools
                 var promptText = userMessage
-                if AttachmentRegistry.shared.latestImageId != nil {
-                    promptText += "\n\n[Context] A recent image is attached in this chat. If the user refers to 'the image', 'photo' or similar, use the analyzeImage tool with no attachmentId to analyze the most recent image and answer the question. Do not ask the user to re-upload or provide a link."
+                if AttachmentRegistry.shared.latestImageId != nil,
+                   (chatManager.currentChat?.messages.last?.attachments.isEmpty == false) {
+                    // Only hint when the current chat actually has attachments
+                    promptText += "\n\n[Context] An image is attached in this chat. If the user refers to 'the image', use the analyzeImage tool without attachmentId to analyze the most recent image."
                 }
                 let prompt = Prompt(promptText)
                 let stream = session.streamResponse(to: prompt)
@@ -189,8 +191,9 @@ class LMModel {
             }
             guard let userMessage = userSource else { return }
             var promptText = userMessage.content
-            if AttachmentRegistry.shared.latestImageId != nil {
-                promptText += "\n\n[Context] A recent image is attached in this chat. If the user refers to 'the image', 'photo' or similar, use the analyzeImage tool with no attachmentId to analyze the most recent image and answer the question. Do not ask the user to re-upload or provide a link."
+            if AttachmentRegistry.shared.latestImageId != nil,
+               (chatManager.currentChat?.messages.last?.attachments.isEmpty == false) {
+                promptText += "\n\n[Context] An image is attached in this chat. If the user refers to 'the image', use the analyzeImage tool without attachmentId to analyze the most recent image."
             }
             let prompt = Prompt(promptText)
             let stream = session.streamResponse(to: prompt)

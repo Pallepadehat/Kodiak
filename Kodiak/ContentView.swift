@@ -34,6 +34,8 @@ struct ContentView: View {
     @State private var showCamera = false
     // PDF picker removed
     @State private var isRecording = false
+    @AppStorage("voiceInputEnabled") private var voiceInputEnabled: Bool = false
+    @AppStorage("handsFreeEnabled") private var handsFreeEnabled: Bool = false
 
     var sidebarOverlay: some View {
         EmptyView()
@@ -287,24 +289,18 @@ struct ContentView: View {
                         model.stopVoiceCapture()
                         isRecording = false
                     } else {
-                        let handsFree = UserDefaults.standard.bool(
-                            forKey: "handsFreeEnabled"
-                        )
-                        model.startVoiceCapture(autoSend: handsFree)
+                        model.startVoiceCapture(autoSend: handsFreeEnabled)
                         isRecording = true
                     }
                 } label: {
                     Image(systemName: isRecording ? "mic.fill" : "mic")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(
-                            UserDefaults.standard.bool(
-                                forKey: "voiceInputEnabled"
-                            ) ? Color.primary : Color.gray
+                            voiceInputEnabled ? Color.primary : Color.gray
                         )
                 }
                 .disabled(
-                    !UserDefaults.standard.bool(forKey: "voiceInputEnabled")
-                        || model.session.isResponding
+                    !voiceInputEnabled || model.session.isResponding
                 )
 
                 Button {

@@ -33,6 +33,18 @@ final class AttachmentRegistry {
 	func pdfURL(for id: UUID) -> URL? {
 		pdfURLById[id]
 	}
+
+    func clearImages() {
+        imageDataById.removeAll()
+        latestImageId = nil
+    }
+
+    func clearAll() {
+        imageDataById.removeAll()
+        pdfURLById.removeAll()
+        latestImageId = nil
+        latestPDFId = nil
+    }
 }
 
 
