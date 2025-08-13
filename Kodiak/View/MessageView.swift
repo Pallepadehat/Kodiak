@@ -9,6 +9,7 @@ import SwiftUI
 import FoundationModels
 
 import UIKit
+import AVFoundation
 
 struct MessageView: View {
     let segments: [Transcript.Segment]
@@ -22,6 +23,8 @@ struct MessageView: View {
     @State private var showEditSheet: Bool = false
     @State private var editText: String = ""
     @Environment(\.openURL) private var openURL
+    @State private var isShowingImagePreview: Bool = false
+    @State private var imagePreview: UIImage? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -45,6 +48,16 @@ struct MessageView: View {
             if let msg = message, !isUser {
                 HStack {
                     Spacer()
+                    Button {
+                        if let content = message?.content, !content.isEmpty {
+                            model.voice.speak(text: content)
+                        }
+                    } label: {
+                        Label("Speak", systemImage: "speaker.wave.2")
+                            .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12)
                     Button {
                         model.regenerateResponse(targetAssistant: msg)
                     } label: {
@@ -76,20 +89,78 @@ struct MessageView: View {
                 }
             }
         }
+        .sheet(isPresented: $isShowingImagePreview) {
+            if let img = imagePreview {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .ignoresSafeArea()
+                }
+            }
+        }
     }
     
     @ViewBuilder
     private func bubbleView(_ text: String) -> some View {
         if isUser {
-            Text(text)
-                .padding(10)
-                .background(Color.gray.opacity(0.2), in: .rect(cornerRadius: 12))
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(text)
+                if let attachments = message?.attachments, !attachments.isEmpty {
+                    attachmentsView(attachments)
+                }
+            }
+            .padding(10)
+            .background(Color.gray.opacity(0.2), in: .rect(cornerRadius: 12))
+            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
-            MarkdownTextView(text: text)
-                .padding(12)
-                .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 8) {
+                MarkdownTextView(text: text)
+                if let attachments = message?.attachments, !attachments.isEmpty {
+                    attachmentsView(attachments)
+                }
+            }
+            .padding(12)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func attachmentsView(_ attachments: [ChatAttachment]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(attachments, id: \.id) { attachment in
+                VStack(alignment: .leading, spacing: 6) {
+                    if let data = attachment.thumbnailData, let uiImage = UIImage(data: data) {
+                        Button {
+                            imagePreview = uiImage
+                            isShowingImagePreview = true
+                        } label: {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(maxWidth: 280, maxHeight: 220)
+                                .clipped()
+                                .clipShape(.rect(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HStack(spacing: 10) {
+                            Image(systemName: attachment.type == .pdf ? "doc" : "photo")
+                                .frame(width: 32, height: 32)
+                                .foregroundStyle(.secondary)
+                                .background(Color.gray.opacity(0.15), in: .rect(cornerRadius: 8))
+                            Text(attachment.filename).font(.subheadline.weight(.semibold))
+                        }
+                    }
+                    if let text = attachment.ocrText, !text.isEmpty {
+                        Text(text.prefix(200) + (text.count > 200 ? "…" : ""))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
     
@@ -100,8 +171,18 @@ struct MessageView: View {
             if msg.isUser {
                 Button { startEdit(msg) } label: { Label("Edit", systemImage: "pencil") }
                 Button { model.regenerateResponse(targetUser: msg) } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
+                if let attachments = msg.attachments.first, let text = attachments.ocrText, !text.isEmpty {
+                    Button {
+                        Task {
+                            let prompt = "Analyze this document: \n\n" + text
+                            model.inputText = prompt
+                            model.sendMessage()
+                        }
+                    } label: { Label("Analyze Document", systemImage: "text.magnifyingglass") }
+                }
             } else {
                 Button { model.regenerateResponse(targetAssistant: msg) } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
+                Button { if let text = message?.content { model.voice.speak(text: text) } } label: { Label("Speak", systemImage: "speaker.wave.2") }
             }
             Divider()
             Button(role: .destructive) { deleteMessage(msg) } label: { Label("Delete", systemImage: "trash") }

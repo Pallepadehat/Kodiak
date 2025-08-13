@@ -9,6 +9,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+@MainActor
 @Observable
 class ChatManager {
     var modelContext: ModelContext?
@@ -62,6 +63,8 @@ class ChatManager {
         guard let chat = currentChat else { return }
         
         let message = ChatMessage(content: content, isUser: isUser, chat: chat)
+        // Ensure the new message is inserted into the model context before relationship mutation
+        modelContext?.insert(message)
         chat.messages.append(message)
         chat.updatedAt = Date()
         
@@ -191,6 +194,20 @@ class ChatManager {
     func updateMessage(_ message: ChatMessage, content: String) {
         message.content = content
         message.chat?.updatedAt = Date()
+        saveContext()
+    }
+
+    /// Attaches a media/document to a specific message and saves the context.
+    func addAttachment(_ attachment: ChatAttachment, to message: ChatMessage) {
+        // Insert attachment explicitly before linking to avoid detached model crashes
+        modelContext?.insert(attachment)
+        message.attachments.append(attachment)
+        message.chat?.updatedAt = Date()
+        saveContext()
+    }
+
+    /// Exposes a safe way to persist recent in-memory model changes (e.g., OCR updates on attachments).
+    func save() {
         saveContext()
     }
 

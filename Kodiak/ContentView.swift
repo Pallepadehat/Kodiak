@@ -5,11 +5,15 @@
 //  Created by Patrick Jakobsen on 11/08/2025.
 //
 
+import CoreHaptics
 import FoundationModels
 import SwiftData
 import SwiftUI
-import CoreHaptics
 import UIKit
+
+#if os(iOS)
+    // PDF removed
+#endif
 
 struct ContentView: View {
     @State var model = LMModel()
@@ -26,6 +30,10 @@ struct ContentView: View {
     @State private var fullGeneratedTitle = ""
     @State private var isTypingTitle = false
     @State private var showToolsSheet = false
+    @State private var showPhotoPicker = false
+    @State private var showCamera = false
+    // PDF picker removed
+    @State private var isRecording = false
 
     var sidebarOverlay: some View {
         EmptyView()
@@ -105,18 +113,18 @@ struct ContentView: View {
                         ) { message in
                             VStack(alignment: .leading, spacing: 6) {
                                 MessageView(
-                                     segments: [
-                                         Transcript.Segment.text(
-                                             Transcript.TextSegment(
-                                                 content: message.content
-                                             )
-                                         )
-                                     ],
-                                     isUser: message.isUser,
-                                     message: message,
-                                     chatManager: chatManager,
-                                     model: model
-                                 )
+                                    segments: [
+                                        Transcript.Segment.text(
+                                            Transcript.TextSegment(
+                                                content: message.content
+                                            )
+                                        )
+                                    ],
+                                    isUser: message.isUser,
+                                    message: message,
+                                    chatManager: chatManager,
+                                    model: model
+                                )
                                 .padding(
                                     message.isUser ? .trailing : .leading,
                                     message.isUser ? 0 : 10
@@ -198,53 +206,142 @@ struct ContentView: View {
     }
 
     var inputSection: some View {
-        HStack(spacing: 8) {
-
-            TextField(
-                "Ask me anything...",
-                text: $model.inputText,
-                axis: .vertical
-            )
-            .textFieldStyle(.plain)
-            .disabled(model.session.isResponding)
-            .frame(height: 55)
-            .onSubmit {
-                if !model.inputText.isEmpty && !model.session.isResponding {
-                    model.sendMessage()
+        VStack(spacing: 8) {
+            // Composer attachment previews
+            if !model.composerAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(model.composerAttachments) { item in
+                            ZStack(alignment: .topTrailing) {
+                                #if os(iOS)
+                                    switch item.kind {
+                                    case .image(let data):
+                                        if let ui = UIImage(data: data) {
+                                            Image(uiImage: ui)
+                                                .resizable()
+                                                .aspectRatio(
+                                                    1,
+                                                    contentMode: .fill
+                                                )
+                                                .frame(width: 120, height: 120)
+                                                .clipShape(
+                                                    .rect(cornerRadius: 16)
+                                                )
+                                        }
+                                    
+                                    }
+                                #endif
+                                Button {
+                                    if let idx = model.composerAttachments
+                                        .firstIndex(where: { $0.id == item.id })
+                                    {
+                                        model.composerAttachments.remove(
+                                            at: idx
+                                        )
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .shadow(radius: 2)
+                                }
+                                .offset(x: -6, y: 6)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 6)
                 }
             }
 
-            // Plus button to open tools sheet
-            Button {
-                showToolsSheet = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(
-                        model.session.isResponding
-                            ? Color.gray.opacity(0.6) : .primary
-                    )
-            }
-            .disabled(model.session.isResponding)
+            // Text input row + actions
+            HStack(spacing: 10) {
+                // Attach
 
-            Button {
-                model.sendMessage()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(
-                        model.session.isResponding
-                            ? Color.gray.opacity(0.6) : .primary
-                    )
+                TextField(
+                    "Ask Anything",
+                    text: $model.inputText,
+                    axis: .vertical
+                )
+                .textFieldStyle(.plain)
+                .disabled(model.session.isResponding)
+                .frame(height: 44)
+                .onSubmit {
+                    if !model.inputText.isEmpty && !model.session.isResponding {
+                        model.sendMessage()
+                    }
+                }
+
+                Menu {
+                    Button { showPhotoPicker = true } label: { Label("Photo Library", systemImage: "photo.on.rectangle") }
+                    Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
+                    Button { showToolsSheet.toggle() } label: { Label("AI Tools", systemImage: "apple.writing.tools") }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .disabled(model.session.isResponding)
+
+                // Mic
+                Button {
+                    if isRecording {
+                        model.stopVoiceCapture()
+                        isRecording = false
+                    } else {
+                        let handsFree = UserDefaults.standard.bool(
+                            forKey: "handsFreeEnabled"
+                        )
+                        model.startVoiceCapture(autoSend: handsFree)
+                        isRecording = true
+                    }
+                } label: {
+                    Image(systemName: isRecording ? "mic.fill" : "mic")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(
+                            UserDefaults.standard.bool(
+                                forKey: "voiceInputEnabled"
+                            ) ? Color.primary : Color.gray
+                        )
+                }
+                .disabled(
+                    !UserDefaults.standard.bool(forKey: "voiceInputEnabled")
+                        || model.session.isResponding
+                )
+
+                Button {
+                    model.sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(
+                            model.session.isResponding
+                                ? Color.gray.opacity(0.6) : .primary
+                        )
+                }
+                .disabled(
+                    (model.inputText.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty && model.composerAttachments.isEmpty)
+                        || model.session.isResponding
+                )
             }
-            .disabled(
-                model.inputText.isEmpty || model.session.isResponding
-            )
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .glassEffect()
         }
         .padding(.horizontal)
-        .glassEffect(.regular.interactive())
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .padding()
+        .padding(.vertical)
+        .sheet(isPresented: $showPhotoPicker) {
+            ImagePicker { image in
+                handlePickedImage(image)
+            }
+        }
+        .sheet(isPresented: $showCamera) {
+            ImagePicker(sourceType: .camera) { image in
+                handlePickedImage(image)
+            }
+        }
+        // PDF picker removed
     }
 
     var body: some View {
@@ -276,19 +373,30 @@ struct ContentView: View {
                     Menu {
                         Button {
                             promptRenameTitle()
-                        } label: { Label("Rename Chat", systemImage: "pencil") }
+                        } label: {
+                            Label("Rename Chat", systemImage: "pencil")
+                        }
                         Button(role: .destructive) {
                             if let current = chatManager.currentChat {
                                 chatManager.deleteChat(current)
                             }
-                        } label: { Label("Delete Chat", systemImage: "trash") }
+                        } label: {
+                            Label("Delete Chat", systemImage: "trash")
+                        }
                         Button {
                             shareCurrentChat()
-                        } label: { Label("Share Chat", systemImage: "square.and.arrow.up") }
+                        } label: {
+                            Label(
+                                "Share Chat",
+                                systemImage: "square.and.arrow.up"
+                            )
+                        }
                         Divider()
                         Button {
                             isShowingSettings.toggle()
-                        } label: { Label("Settings", systemImage: "gear") }
+                        } label: {
+                            Label("Settings", systemImage: "gear")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -326,6 +434,18 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Attachments handling (composer staging)
+    private func handlePickedImage(_ image: UIImage?) {
+        guard let image = image else { return }
+        if let data = image.jpegData(compressionQuality: 0.85) {
+            model.composerAttachments.append(
+                LMModel.ComposerAttachment(id: UUID(), kind: .image(data: data))
+            )
+        }
+    }
+
+    // PDF handler removed
+
     private func startTypewriterAnimation() {
         guard animateTitle else { return }
         displayedTitle = ""
@@ -333,10 +453,10 @@ struct ContentView: View {
 
         // Light haptic when starting to type (only on iOS devices with haptics)
         #if os(iOS)
-        if hapticsEnabled && deviceSupportsHaptics {
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
-        }
+            if hapticsEnabled && deviceSupportsHaptics {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                impactFeedback.impactOccurred()
+            }
         #endif
 
         // Type out each character with a delay
@@ -349,12 +469,14 @@ struct ContentView: View {
 
                 // Small haptic for each character (very subtle)
                 #if os(iOS)
-                if hapticsEnabled && deviceSupportsHaptics {
-                    if index % 3 == 0 {  // Only every 3rd character to avoid overwhelming
-                        let subtleFeedback = UIImpactFeedbackGenerator(style: .rigid)
-                        subtleFeedback.impactOccurred(intensity: 0.3)
+                    if hapticsEnabled && deviceSupportsHaptics {
+                        if index % 3 == 0 {  // Only every 3rd character to avoid overwhelming
+                            let subtleFeedback = UIImpactFeedbackGenerator(
+                                style: .rigid
+                            )
+                            subtleFeedback.impactOccurred(intensity: 0.3)
+                        }
                     }
-                }
                 #endif
 
                 // When finished typing
@@ -364,10 +486,11 @@ struct ContentView: View {
 
                         // Final haptic when complete
                         #if os(iOS)
-                        if hapticsEnabled && deviceSupportsHaptics {
-                            let completeFeedback = UIImpactFeedbackGenerator(style: .medium)
-                            completeFeedback.impactOccurred()
-                        }
+                            if hapticsEnabled && deviceSupportsHaptics {
+                                let completeFeedback =
+                                    UIImpactFeedbackGenerator(style: .medium)
+                                completeFeedback.impactOccurred()
+                            }
                         #endif
                     }
                 }
@@ -376,45 +499,73 @@ struct ContentView: View {
     }
 
     // Export removed per request
-    
+
     #if os(iOS)
-    private var deviceSupportsHaptics: Bool {
-        CHHapticEngine.capabilitiesForHardware().supportsHaptics
-    }
+        private var deviceSupportsHaptics: Bool {
+            CHHapticEngine.capabilitiesForHardware().supportsHaptics
+        }
     #endif
     private func promptRenameTitle() {
         guard let current = chatManager.currentChat else { return }
-        let alert = UIAlertController(title: "Rename Chat", message: nil, preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: "Rename Chat",
+            message: nil,
+            preferredStyle: .alert
+        )
         alert.addTextField { tf in tf.text = current.title }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: "Save", style: .default, handler: { _ in
-            if let text = alert.textFields?.first?.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                current.title = String(text.prefix(50))
-                chatManager.generateTitleIfNeeded()
-            }
-        }))
+        alert.addAction(
+            UIAlertAction(title: "Cancel", style: .cancel, handler: nil)
+        )
+        alert.addAction(
+            UIAlertAction(
+                title: "Save",
+                style: .default,
+                handler: { _ in
+                    if let text = alert.textFields?.first?.text,
+                        !text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty
+                    {
+                        current.title = String(text.prefix(50))
+                        chatManager.generateTitleIfNeeded()
+                    }
+                }
+            )
+        )
         presentAlert(alert)
     }
-    
+
     private func presentAlert(_ alert: UIAlertController) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.keyWindow?.rootViewController else { return }
+        guard
+            let scene = UIApplication.shared.connectedScenes.first
+                as? UIWindowScene,
+            let root = scene.keyWindow?.rootViewController
+        else { return }
         root.present(alert, animated: true)
     }
-    
+
     private func shareCurrentChat() {
-        guard let chat = chatManager.currentChat, !chat.messages.isEmpty else { return }
+        guard let chat = chatManager.currentChat, !chat.messages.isEmpty else {
+            return
+        }
         let text = buildMarkdown(for: chat)
-        let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let root = scene.keyWindow?.rootViewController else { return }
+        let av = UIActivityViewController(
+            activityItems: [text],
+            applicationActivities: nil
+        )
+        guard
+            let scene = UIApplication.shared.connectedScenes.first
+                as? UIWindowScene,
+            let root = scene.keyWindow?.rootViewController
+        else { return }
         root.present(av, animated: true)
     }
-    
+
     private func buildMarkdown(for chat: Chat) -> String {
         var lines: [String] = ["# \(chat.title)"]
         for m in chat.messages.sorted(by: { $0.timestamp < $1.timestamp }) {
-            lines.append("\(m.isUser ? "**You**" : "**Kodiak**"): \n\(m.content)\n")
+            lines.append(
+                "\(m.isUser ? "**You**" : "**Kodiak**"): \n\(m.content)\n"
+            )
         }
         return lines.joined(separator: "\n\n")
     }

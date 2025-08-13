@@ -9,6 +9,7 @@ import Foundation
 import FoundationModels
 import SwiftUI
 import CoreHaptics
+import AVFoundation
 
 @Observable
 class LMModel {
@@ -28,10 +29,26 @@ class LMModel {
     private let defaultSystemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner. You will provide good and detailed answers if the users ask for knowglage. Always respond in markdown format. ONLY USE TOOLS IF NEEDED!"
     
     var session = LanguageModelSession()
+    let voice = VoiceService()
+    #if os(iOS)
+    let ocr = OCRService()
+    #endif
+
+    var liveTranscript: String = ""
+
+    // Composer attachments staged before sending
+    struct ComposerAttachment: Identifiable, Equatable {
+        enum Kind: Equatable { case image(data: Data) }
+        let id: UUID
+        let kind: Kind
+    }
+    var composerAttachments: [ComposerAttachment] = []
 
     func refreshSessionFromDefaults() {
         let prompt = UserDefaults.standard.string(forKey: "systemPrompt") ?? defaultSystemPrompt
-        let tools = buildEnabledTools()
+        var tools = buildEnabledTools()
+        // Add image analysis tool only
+        tools.append(ImageAnalysisTool())
         if tools.isEmpty {
             session = LanguageModelSession { prompt }
         } else {
@@ -58,13 +75,14 @@ class LMModel {
         return enabled
     }
     
+    @MainActor
     func sendMessage() {
         guard !inputText.isEmpty, let chatManager = chatManager else { return }
         
         let userMessage = inputText
         inputText = ""
         
-        Task {
+        Task { @MainActor in
             do {
                 // Haptic feedback when sending message
                 if UserDefaults.standard.bool(forKey: "hapticsEnabled") && CHHapticEngine.capabilitiesForHardware().supportsHaptics {
@@ -72,18 +90,34 @@ class LMModel {
                     impactFeedback.impactOccurred()
                 }
                 
-                await MainActor.run {
-                    chatManager.addMessage(userMessage, isUser: true)
-                    chatManager.generateTitleIfNeeded()
+                var createdMessage: ChatMessage?
+                chatManager.addMessage(userMessage, isUser: true)
+                createdMessage = chatManager.currentChat?.messages.last
+                chatManager.generateTitleIfNeeded()
+                // Attach staged composer attachments to the created message
+                if let m = createdMessage {
+                    for item in composerAttachments {
+                        if case .image(let data) = item.kind {
+                            let att = ChatAttachment(type: .image, filename: "image.jpg", sizeBytes: data.count, message: m)
+                            att.thumbnailData = data
+                            chatManager.addAttachment(att, to: m)
+                            AttachmentRegistry.shared.registerImage(data: data, for: att.id)
+                        }
+                    }
                 }
+                // Clear composer attachments after sending
+                composerAttachments.removeAll()
                 
                 // Create a placeholder assistant message for streaming
                 var placeholder: ChatMessage?
-                await MainActor.run {
-                    placeholder = chatManager.createAssistantPlaceholder()
-                }
+                placeholder = chatManager.createAssistantPlaceholder()
                 
-                let prompt = Prompt(userMessage)
+                // Inject contextual tool hint for latest attachments so the model knows to use tools
+                var promptText = userMessage
+                if AttachmentRegistry.shared.latestImageId != nil {
+                    promptText += "\n\n[Context] A recent image is attached in this chat. If the user refers to 'the image', 'photo' or similar, use the analyzeImage tool with no attachmentId to analyze the most recent image and answer the question. Do not ask the user to re-upload or provide a link."
+                }
+                let prompt = Prompt(promptText)
                 let stream = session.streamResponse(to: prompt)
                 
                 var hasStarted = false
@@ -91,25 +125,26 @@ class LMModel {
                 
                 for try await token in stream {
                     if !hasStarted {
-                        await MainActor.run { self.isAwaitingResponse = true }
+                        self.isAwaitingResponse = true
                         hasStarted = true
                     }
                     fullResponse = token.content
                     if let placeholder = placeholder {
-                        await MainActor.run { chatManager.updateMessage(placeholder, content: fullResponse) }
+                        chatManager.updateMessage(placeholder, content: fullResponse)
                     }
                 }
                 
-                await MainActor.run { self.isAwaitingResponse = false }
+                self.isAwaitingResponse = false
                 
                 // Finalize placeholder and trigger haptic
                 if let placeholder = placeholder {
-                    await MainActor.run {
-                        chatManager.updateMessage(placeholder, content: fullResponse)
-                        if UserDefaults.standard.bool(forKey: "hapticsEnabled") && CHHapticEngine.capabilitiesForHardware().supportsHaptics {
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                            impactFeedback.impactOccurred()
-                        }
+                    chatManager.updateMessage(placeholder, content: fullResponse)
+                    if UserDefaults.standard.bool(forKey: "hapticsEnabled") && CHHapticEngine.capabilitiesForHardware().supportsHaptics {
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                        impactFeedback.impactOccurred()
+                    }
+                    if UserDefaults.standard.bool(forKey: "speakRepliesEnabled") {
+                        self.voice.speak(text: fullResponse)
                     }
                 }
                 
@@ -151,7 +186,11 @@ class LMModel {
                 userSource = await MainActor.run { chatManager.previousUserMessage(before: targetAssistant) }
             }
             guard let userMessage = userSource else { return }
-            let prompt = Prompt(userMessage.content)
+            var promptText = userMessage.content
+            if AttachmentRegistry.shared.latestImageId != nil {
+                promptText += "\n\n[Context] A recent image is attached in this chat. If the user refers to 'the image', 'photo' or similar, use the analyzeImage tool with no attachmentId to analyze the most recent image and answer the question. Do not ask the user to re-upload or provide a link."
+            }
+            let prompt = Prompt(promptText)
             let stream = session.streamResponse(to: prompt)
             var fullResponse = ""
             for try await token in stream {
@@ -167,6 +206,44 @@ class LMModel {
                         assistantTarget = placeholder
                     }
                 }
+            }
+            if UserDefaults.standard.bool(forKey: "speakRepliesEnabled") {
+                self.voice.speak(text: fullResponse)
+            }
+        }
+    }
+
+    // MARK: - Voice capture lifecycle
+    func startVoiceCapture(autoSend: Bool = false) {
+        #if os(iOS)
+        liveTranscript = ""
+        voice.startListening(onPartial: { [weak self] partial in
+            self?.liveTranscript = partial
+        }, onFinal: { [weak self] finalText in
+            guard let self = self else { return }
+            self.inputText = finalText
+            if autoSend { self.sendMessage() }
+            // Hands-free resume handled on TTS completion via notification observer
+        }, onError: { error in
+            print("Voice error: \(error.localizedDescription)")
+        })
+        #endif
+    }
+    
+    func stopVoiceCapture() {
+        voice.stopListening()
+    }
+    
+    func stopSpeaking() {
+        voice.stopSpeaking()
+    }
+
+    // MARK: - Hands-free loop
+    init() {
+        NotificationCenter.default.addObserver(forName: .voiceDidFinishSpeaking, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            if UserDefaults.standard.bool(forKey: "handsFreeEnabled") {
+                self.startVoiceCapture(autoSend: true)
             }
         }
     }

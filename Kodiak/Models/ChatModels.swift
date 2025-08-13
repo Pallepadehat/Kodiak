@@ -37,6 +37,7 @@ class ChatMessage {
     var chat: Chat?
     // Stores user feedback on assistant responses: "positive", "negative", or nil
     var sentiment: String?
+    @Relationship(deleteRule: .cascade) var attachments: [ChatAttachment]
     
     init(content: String, isUser: Bool, chat: Chat? = nil) {
         self.id = UUID()
@@ -45,5 +46,33 @@ class ChatMessage {
         self.timestamp = Date()
         self.chat = chat
         self.sentiment = nil
+        self.attachments = []
+    }
+}
+
+@Model
+class ChatAttachment {
+    enum AttachmentType: String, Codable { case image, pdf }
+    @Attribute(.unique) var id: UUID
+    var typeRaw: String
+    var filename: String
+    var sizeBytes: Int
+    var ocrText: String?
+    var thumbnailData: Data?
+    var message: ChatMessage?
+    
+    var type: AttachmentType {
+        get { AttachmentType(rawValue: typeRaw) ?? .image }
+        set { typeRaw = newValue.rawValue }
+    }
+    
+    init(type: AttachmentType, filename: String, sizeBytes: Int, message: ChatMessage? = nil) {
+        self.id = UUID()
+        self.typeRaw = type.rawValue
+        self.filename = filename
+        self.sizeBytes = sizeBytes
+        self.message = message
+        self.ocrText = nil
+        self.thumbnailData = nil
     }
 }

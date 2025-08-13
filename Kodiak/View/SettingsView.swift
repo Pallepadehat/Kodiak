@@ -18,6 +18,9 @@ struct SettingsView: View {
     @AppStorage("titleTypeSpeed") private var titleTypeSpeed: Double = 0.05
     @AppStorage("systemPrompt") private var systemPrompt: String = "You are a helpful and concise assistant. Provide clear, accurate answers in a professional manner."
     @AppStorage("showTimestamps") private var showTimestamps: Bool = true
+    @AppStorage("voiceInputEnabled") private var voiceInputEnabled: Bool = false
+    @AppStorage("speakRepliesEnabled") private var speakRepliesEnabled: Bool = false
+    @AppStorage("handsFreeEnabled") private var handsFreeEnabled: Bool = false
     
     // Tools controls removed; managed in Tools sheet
     
@@ -58,6 +61,19 @@ struct SettingsView: View {
                         }
                         .disabled(!animateTitle)
                     }
+                }
+
+                Section("Voice & Audio") {
+                    Toggle(isOn: $voiceInputEnabled) {
+                        Label("Enable Voice Input", systemImage: "mic")
+                    }
+                    Toggle(isOn: $speakRepliesEnabled) {
+                        Label("Speak Replies", systemImage: "speaker.wave.2")
+                    }
+                    Toggle(isOn: $handsFreeEnabled) {
+                        Label("Hands-free Mode", systemImage: "headphones")
+                    }
+                    .disabled(!voiceInputEnabled || !speakRepliesEnabled)
                 }
                 
                 Section("Model") {
