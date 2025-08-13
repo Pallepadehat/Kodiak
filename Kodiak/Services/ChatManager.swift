@@ -206,6 +206,27 @@ class ChatManager {
         saveContext()
     }
 
+    /// Atomically creates a user message and attaches image data to it.
+    /// - Parameters:
+    ///   - content: The text content for the user message.
+    ///   - imageDatas: Array of image `Data` to attach.
+    /// - Returns: The created `ChatMessage`.
+    func createUserMessageWithImages(content: String, imageDatas: [Data]) -> ChatMessage? {
+        guard let chat = currentChat else { return nil }
+        let message = ChatMessage(content: content, isUser: true, chat: chat)
+        modelContext?.insert(message)
+        chat.messages.append(message)
+        for data in imageDatas {
+            let att = ChatAttachment(type: .image, filename: "image.jpg", sizeBytes: data.count, message: message)
+            att.thumbnailData = data
+            modelContext?.insert(att)
+            message.attachments.append(att)
+        }
+        chat.updatedAt = Date()
+        saveContext()
+        return message
+    }
+
     /// Exposes a safe way to persist recent in-memory model changes (e.g., OCR updates on attachments).
     func save() {
         saveContext()

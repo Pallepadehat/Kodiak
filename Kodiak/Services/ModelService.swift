@@ -91,16 +91,18 @@ class LMModel {
                 }
                 
                 var createdMessage: ChatMessage?
-                chatManager.addMessage(userMessage, isUser: true)
-                createdMessage = chatManager.currentChat?.messages.last
+                // Prepare image datas from staged attachments in the current snapshot order
+                let imageDatas: [Data] = composerAttachments.compactMap { item in
+                    if case .image(let data) = item.kind { return data }
+                    return nil
+                }
+                // Create the message and bind attachments atomically to avoid mis-association
+                createdMessage = chatManager.createUserMessageWithImages(content: userMessage, imageDatas: imageDatas)
                 chatManager.generateTitleIfNeeded()
                 // Attach staged composer attachments to the created message
                 if let m = createdMessage {
-                    for item in composerAttachments {
-                        if case .image(let data) = item.kind {
-                            let att = ChatAttachment(type: .image, filename: "image.jpg", sizeBytes: data.count, message: m)
-                            att.thumbnailData = data
-                            chatManager.addAttachment(att, to: m)
+                    for att in m.attachments {
+                        if let data = att.thumbnailData {
                             AttachmentRegistry.shared.registerImage(data: data, for: att.id)
                         }
                     }
